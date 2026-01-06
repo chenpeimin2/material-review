@@ -254,8 +254,54 @@ def test_scene(video_file, threshold, min_interval, max_frames):
 
 
 @cli.command()
+@click.option('--file', '-f', 'video_file', required=True, help='指定视频文件路径')
+@click.option('--fps', default=4, help='抽帧频率 (FPS)')
+@click.option('--cols', default=6, help='网格列数 (如 6 表示 6x6 网格)')
+def test_grid(video_file, fps, cols):
+    """测试网格拼图生成（将多帧合成一张图）"""
+    console.print(Panel("[bold]网格拼图测试[/]", style="blue"))
+    
+    config = load_config()
+    ensure_directories(config)
+    
+    paths = config.get('paths', {})
+    screenshot_path = paths.get('screenshots', './screenshots')
+    
+    if not os.path.exists(video_file):
+        console.print(f"[red]✗ 视频文件不存在：{video_file}[/]")
+        sys.exit(1)
+        
+    video_config = config.get('video', {})
+    # 临时修改配置用于测试
+    test_config = {**video_config, 'extract_fps': fps, 'grid_cols': cols}
+    processor = VideoProcessor(test_config)
+    
+    # 1. 提取帧
+    frames = processor.extract_frames(video_file)
+    if not frames:
+        console.print("[red]✗ 提取帧失败[/]")
+        sys.exit(1)
+        
+    # 2. 生成网格图
+    grids = processor.create_frame_grid(frames, cols=cols)
+    
+    # 3. 保存网格图
+    video_name = Path(video_file).stem
+    grid_dir = Path(screenshot_path) / f"{video_name}_grids"
+    grid_dir.mkdir(parents=True, exist_ok=True)
+    
+    saved_paths = processor.save_grid_images(grids, str(grid_dir), basename=video_name)
+    
+    console.print(f"\n[green]✓ 成功生成 {len(saved_paths)} 张网格图[/]")
+    console.print(f"保存目录: [bold]{grid_dir}[/]")
+    for p in saved_paths:
+        console.print(f"  - {Path(p).name}")
+
+
+@cli.command()
 @click.argument('image_path')
-def test_image(image_path):
+@click.option('--grid', is_flag=True, help='是否为网格拼图（使用专用 Prompt）')
+def test_image(image_path, grid):
     """测试单张图片的 AI 审核（用于调试审核规则）"""
     import base64
     from dataclasses import dataclass
@@ -281,18 +327,35 @@ def test_image(image_path):
     # 构建提示词
     custom_prompt = review_config.get('custom_prompt', '')
     
-    prompt = """你是一个专业的视频内容审核员。
+    if grid:
+        prompt = f"""你是一个极致严谨视频内容审核专家。
 
-【第一步】请仔细查看画面，逐个列出你看到的所有应用名称、品牌名称、Logo和文字。
+【上下文】
+这是一张网格拼图。每张小图左上角有时间戳标签（例如 0:15.50）。
 
-【第二步】根据以下规则判断是否有问题：
-1. 违法违规内容（黄赌毒、暴力等）
-2. 竞品品牌露出（任何非 Mico 品牌的应用名称）
-3. 不当言论或手势
-4. 敏感信息泄露
-5. 画面质量问题
+【核心任务】
+请仔细检查每一格画面，列出你看到的【所有】应用名称、图标和品牌。特别要注意角落处（如右下角）的细节，以及 App Store 搜索结果列表。
+
+【审核标准】
+{custom_prompt}
+
+【强制工作流】
+1. **转录步骤**：针对每一格，先写出看到的所有 App 和品牌名称。
+2. **判定步骤**：根据转录结果对照审核标准判断。
 
 """
+    else:
+        prompt = f"""你是一个专业的视频内容审核员。
+
+【审核标准】
+{custom_prompt}
+
+【工作流】
+1. 请仔细查看画面，逐个列出你看到的所有应用名称、品牌名称、Logo和文字。
+2. 根据审核标准判断是否存在违规内容、竞品品牌露出或画面质量问题。
+
+"""
+
     if custom_prompt:
         prompt += f"【特殊审核要求】{custom_prompt}\n\n"
     
@@ -304,6 +367,7 @@ def test_image(image_path):
     "description": "画面描述",
     "issues": [
         {
+            "timestamp": "问题出现的时间戳或网格位置（如 0:15.50）",
             "category": "问题类别",
             "description": "问题描述，说明具体看到了什么违规内容",
             "severity": "low/medium/high/critical",
@@ -642,8 +706,12 @@ def review(video_file, download_first, sender, since):
             console.print(f"[red]✗ 无法提取视频帧，跳过[/]")
             continue
         
-        # AI 审核
-        result = reviewer.review_video(frames, video_path)
+        # 创建网格图（拼图模式，减少 API 调用）
+        grid_cols = video_config.get('grid_cols', 4)  # 默认 4x4 网格
+        grids = processor.create_frame_grid(frames, cols=grid_cols)
+        
+        # AI 审核（使用网格模式）
+        result = reviewer.review_video(frames, video_path, grids=grids)
         if not result:
             console.print(f"[red]✗ AI 审核出现严重错误，停止后续审核[/]")
             break
@@ -652,21 +720,25 @@ def review(video_file, download_first, sender, since):
         screenshots = {}
         if result.issues:
             console.print(f"[blue]正在生成问题截图...[/]")
-            
-            # 创建视频专属截图目录
             video_name = Path(video_path).stem
             video_screenshot_dir = Path(screenshot_path) / video_name
             video_screenshot_dir.mkdir(parents=True, exist_ok=True)
-            
-            issue_timestamps = result.get_issue_timestamps()
-            screenshot_results = processor.capture_screenshots_batch(
-                video_path,
-                issue_timestamps,
-                str(video_screenshot_dir)
-            )
-            
-            for timestamp, screenshot_file in screenshot_results:
-                screenshots[timestamp] = screenshot_file
+            for issue in result.issues:
+                nearest_path = processor.save_frame_nearest(
+                    frames, issue.timestamp, str(video_screenshot_dir), video_name
+                )
+                if not nearest_path:
+                    continue
+                screenshots[issue.timestamp] = nearest_path
+            console.print(f"[blue]正在为问题截图添加标注...[/]")
+            for issue in result.issues:
+                src_path = screenshots.get(issue.timestamp)
+                if not src_path:
+                    continue
+                label = f"{issue.category}: {issue.description}".strip()
+                marked_path = processor.annotate_image_file(src_path, label)
+                if marked_path:
+                    screenshots[issue.timestamp] = marked_path
         
         # 生成报告
         video_name = Path(video_path).stem

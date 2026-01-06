@@ -34,7 +34,7 @@ ai:
   # 申请地址：https://dashscope.console.aliyun.com/
   qwen:
     api_key: "sk-d14008766eb14b4b8520f082186d59aa"
-    model: "qwen-vl-plus"
+    model: "qwen-vl-max"
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
   # 智谱 AI 配置（免费、强大）
@@ -47,12 +47,25 @@ ai:
 
 # ========== 视频处理配置 ==========
 video:
-  # 关键帧提取间隔（秒）
-  # 值越小分析越精细，但处理时间更长
-  frame_interval: 0.1
+  # 抽帧频率：每秒提取几帧（推荐方式）
+  # 例如：extract_fps: 2 表示每秒抽取 2 帧
+  # 值越大分析越精细，但处理时间和成本更高
+  # 建议：静态内容 1-2 fps，快速变化内容 3-5 fps
+  extract_fps: 4
   
-  # 最大提取帧数（防止超长视频）
+  # 旧配置方式（二选一，extract_fps 优先）：
+  # frame_interval: 0.5  # 每 0.5 秒抽一帧
+  
+  # 最大提取帧数（防止超长视频消耗过多资源）
   max_frames: 200
+  
+  # 网格拼图配置（用于减少 AI API 调用次数）
+  # grid_cols: 网格列数，如 4 表示 4x4=16 帧拼成一张图
+  # 建议：追求极致准确使用 3 或 4；追求极致性价比使用 5 或 6
+  grid_cols: 4
+  
+  # 单元格宽度（像素），建议 640 或以上以保证清晰度
+  cell_width: 640
   
   # 支持的视频格式
   supported_formats:
@@ -102,7 +115,7 @@ review:
     
     【核心判定规则】：
     1. 必须判定为严重违规 (Critical) 的竞品：
-       - iScreen, Widgetsmith, Color Widgets, MD Clock, Top Widgets (万能小组件), Locket, Widgetable 等。
+       - iScreen, Widgetsmith, Color Widgets, MD Clock, Top Widgets (万能小组件), Locket, Widgetable, Temas 等。
        - 只要画面中出现这些 App 的名称、图标或 Logo，即为严重违规。
     
     2. 允许出现的非竞品内容（绝对不要判定为违规）：

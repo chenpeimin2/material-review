@@ -61,8 +61,14 @@ class VideoProcessor:
             config: 视频处理配置
         """
         self.config = config or {}
-        self.frame_interval = self.config.get('frame_interval', 5)  # 默认每5秒提取一帧
-        self.max_frames = self.config.get('max_frames', 50)  # 最大帧数
+        # 支持两种配置方式：
+        # 1. extract_fps: 每秒提取几帧 (推荐，如 extract_fps=2 表示每秒2帧)
+        # 2. frame_interval: 每隔几秒提取一帧 (旧方式，向后兼容)
+        self.extract_fps = self.config.get('extract_fps', None)  # 每秒抽帧数
+        self.frame_interval = self.config.get('frame_interval', 1)  # 每X秒提取一帧（旧方式）
+        self.max_frames = self.config.get('max_frames', 200)  # 最大帧数
+        self.grid_cols = self.config.get('grid_cols', 4)  # 拼图列数
+        self.cell_width = self.config.get('cell_width', 640)  # 每个单元格宽度
         self.supported_formats = self.config.get('supported_formats', 
             ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v'])
     
@@ -123,28 +129,41 @@ class VideoProcessor:
     
     def extract_frames(self, 
                        video_path: str, 
-                       interval_seconds: Optional[int] = None,
+                       interval_seconds: Optional[float] = None,
+                       fps: Optional[float] = None,
                        max_frames: Optional[int] = None) -> List[VideoFrame]:
         """
         提取视频关键帧
         
         Args:
             video_path: 视频文件路径
-            interval_seconds: 提取间隔（秒），默认使用配置值
+            interval_seconds: 提取间隔（秒），与 fps 二选一
+            fps: 每秒提取帧数（推荐），与 interval_seconds 二选一
             max_frames: 最大帧数，默认使用配置值
             
         Returns:
             提取的帧列表
         """
-        interval = interval_seconds or self.frame_interval
         max_count = max_frames or self.max_frames
+        
+        # 确定抽帧间隔：优先使用参数，其次使用配置
+        if fps is not None:
+            interval = 1.0 / fps
+        elif interval_seconds is not None:
+            interval = interval_seconds
+        elif self.extract_fps is not None:
+            interval = 1.0 / self.extract_fps
+        else:
+            interval = self.frame_interval
         
         video_info = self.get_video_info(video_path)
         if not video_info:
             return []
         
+        # 计算实际 fps 用于日志显示
+        actual_fps = 1.0 / interval if interval > 0 else 0
         console.print(f"[blue]正在提取视频帧：{video_info.filename}[/]")
-        console.print(f"[dim]视频时长：{self._format_duration(video_info.duration)}[/]")
+        console.print(f"[dim]视频时长：{self._format_duration(video_info.duration)}，抽帧频率：{actual_fps:.1f} fps（每 {interval:.2f} 秒一帧）[/]")
         console.print(f"[dim]分辨率：{video_info.width}x{video_info.height}[/]")
         
         try:
@@ -154,7 +173,7 @@ class VideoProcessor:
                 return []
             
             frames = []
-            fps = video_info.fps
+            video_fps = video_info.fps
             total_frames = video_info.frame_count
             
             # 计算需要提取的时间点
@@ -165,7 +184,7 @@ class VideoProcessor:
                 current_time += interval
             
             # 确保包含最后一帧（如果视频足够长）
-            if video_info.duration > interval and timestamps[-1] < video_info.duration - 1:
+            if video_info.duration > interval and len(timestamps) > 0 and timestamps[-1] < video_info.duration - 1:
                 timestamps.append(video_info.duration - 0.5)
             
             with Progress(
@@ -179,7 +198,7 @@ class VideoProcessor:
                 
                 for timestamp in timestamps:
                     # 跳转到指定时间点
-                    frame_pos = int(timestamp * fps)
+                    frame_pos = int(timestamp * video_fps)
                     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_pos)
                     
                     ret, frame = cap.read()
@@ -488,3 +507,165 @@ class VideoProcessor:
                 return f"{size:.1f} {unit}"
             size /= 1024
         return f"{size:.1f} TB"
+    
+    def create_frame_grid(self, 
+                          frames: List[VideoFrame], 
+                          cols: Optional[int] = None,
+                          cell_width: Optional[int] = None,
+                          show_timestamp: bool = True) -> List[Tuple[bytes, List[float]]]:
+        """
+        将多帧合并成网格图（拼图）
+        
+        可以显著减少 AI API 调用次数：例如 4x4=16 帧合成一张图，
+        原本需要 16 次 API 调用，现在只需 1 次。
+        
+        Args:
+            frames: VideoFrame 列表
+            cols: 每行列数，默认使用配置或 4
+            cell_width: 每个单元格宽度（像素），默认使用配置或 640
+            show_timestamp: 是否在每帧上显示时间戳标签
+            
+        Returns:
+            列表，每个元素是 (grid_image_bytes, timestamps_in_grid)
+        """
+        import numpy as np
+        
+        if not frames:
+            return []
+        
+        cols = cols or self.grid_cols
+        cell_width = cell_width or self.cell_width
+        
+        # 计算网格布局
+        rows = cols  # 正方形网格比较稳
+        frames_per_grid = cols * rows
+        
+        # 计算单元格高度（保持原始宽高比）
+        sample_frame = frames[0]
+        aspect_ratio = sample_frame.height / sample_frame.width
+        cell_height = int(cell_width * aspect_ratio)
+        
+        grids = []
+        
+        # 分批处理帧
+        for batch_start in range(0, len(frames), frames_per_grid):
+            batch_frames = frames[batch_start:batch_start + frames_per_grid]
+            batch_timestamps = [f.timestamp for f in batch_frames]
+            
+            # 创建空白画布
+            grid_width = cols * cell_width
+            actual_rows = (len(batch_frames) + cols - 1) // cols
+            grid_height = actual_rows * cell_height
+            grid_image = np.zeros((grid_height, grid_width, 3), dtype=np.uint8)
+            
+            for i, frame in enumerate(batch_frames):
+                row = i // cols
+                col = i % cols
+                
+                # 解码帧图像
+                nparr = np.frombuffer(frame.image_data, np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                
+                if img is None:
+                    continue
+                
+                # 缩放到单元格大小
+                img_resized = cv2.resize(img, (cell_width, cell_height))
+                
+                # 添加时间戳标签
+                if show_timestamp:
+                    minutes = int(frame.timestamp // 60)
+                    seconds = frame.timestamp % 60
+                    label = f"{minutes}:{seconds:05.2f}"
+                    
+                    # 绘制标签背景
+                    label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+                    cv2.rectangle(img_resized, (2, 2), (label_size[0] + 8, label_size[1] + 8), (0, 0, 0), -1)
+                    # 绘制标签文字
+                    cv2.putText(img_resized, label, (5, label_size[1] + 5), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                
+                # 放置到网格中
+                y_start = row * cell_height
+                y_end = y_start + cell_height
+                x_start = col * cell_width
+                x_end = x_start + cell_width
+                grid_image[y_start:y_end, x_start:x_end] = img_resized
+            
+            # 编码为 JPEG
+            _, buffer = cv2.imencode('.jpg', grid_image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            grids.append((buffer.tobytes(), batch_timestamps))
+        
+        console.print(f"[green]✓ 已将 {len(frames)} 帧合并为 {len(grids)} 张网格图（{cols}x{rows}）[/]")
+        return grids
+
+    def save_grid_images(self, 
+                         grids: List[Tuple[bytes, List[float]]], 
+                         output_dir: str, 
+                         basename: str = "grid") -> List[str]:
+        """
+        将生成的网格图保存为文件
+        
+        Args:
+            grids: create_frame_grid 返回的网格数据列表
+            output_dir: 保存目录
+            basename: 文件名前缀
+            
+        Returns:
+            保存的文件路径列表
+        """
+        os.makedirs(output_dir, exist_ok=True)
+        paths = []
+        
+        for i, (image_bytes, timestamps) in enumerate(grids):
+            time_str = f"{timestamps[0]:.1f}s_{timestamps[-1]:.1f}s"
+            filename = f"{basename}_{i+1:02d}_{time_str}.jpg"
+            filepath = os.path.join(output_dir, filename)
+            
+            with open(filepath, 'wb') as f:
+                f.write(image_bytes)
+            
+            paths.append(filepath)
+            console.print(f"  已保存网格图: [dim]{filepath}[/]")
+            
+        return paths
+
+    def annotate_image_file(self, image_path: str, label: str, output_path: Optional[str] = None) -> Optional[str]:
+        try:
+            img = cv2.imread(image_path)
+            if img is None:
+                return None
+            h, w = img.shape[:2]
+            band_h = max(30, int(h * 0.12))
+            overlay = img.copy()
+            cv2.rectangle(overlay, (0, 0), (w, band_h), (0, 0, 255), -1)
+            alpha = 0.35
+            img = cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            scale = 0.8
+            thickness = 2
+            cv2.putText(img, label[:60], (16, int(band_h*0.7)), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+            if output_path is None:
+                p = Path(image_path)
+                output_path = str(p.with_name(p.stem + "_marked" + p.suffix))
+            cv2.imwrite(output_path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            return output_path
+        except Exception:
+            return None
+
+    def save_frame_nearest(self, 
+                           frames: List[VideoFrame], 
+                           target_timestamp: float, 
+                           output_dir: str,
+                           filename_prefix: str) -> Optional[str]:
+        if not frames:
+            return None
+        nearest = min(frames, key=lambda f: abs(f.timestamp - target_timestamp))
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        target_str = f"{target_timestamp:.2f}".replace('.', '_')
+        nearest_str = f"{nearest.timestamp:.2f}".replace('.', '_')
+        filename = f"{filename_prefix}_{target_str}s_nearest_{nearest_str}s.jpg"
+        out = os.path.join(output_dir, filename)
+        with open(out, 'wb') as f:
+            f.write(nearest.image_data)
+        return out
