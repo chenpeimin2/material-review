@@ -1,0 +1,172 @@
+# 素材视频审核工作流配置文件
+# 请根据实际情况修改以下配置
+
+# ========== 邮箱配置 ==========
+email:
+  # IMAP 服务器配置
+  # 163邮箱: imap.163.com
+  # 126邮箱: imap.126.com
+  imap_server: "imap.126.com"
+  imap_port: 993
+  use_ssl: true
+  
+  # 登录凭据
+  # 注意：密码是授权码，不是登录密码！
+  # 获取授权码：登录网页版邮箱 → 设置 → POP3/SMTP/IMAP → 开启IMAP → 获取授权码
+  username: "chenpm2023@126.com"
+  password: "YGmWb32dSZz7apij"
+  
+  # 邮件筛选条件（可选）
+  filter:
+    # 只处理特定发件人的邮件（留空则处理所有）
+    sender: ""
+    # 只处理指定日期之后的邮件（格式：2024-01-01）
+    since_date: ""
+    # 邮件主题包含的关键词（留空则不过滤）
+    subject_contains: ""
+
+# ========== AI 审核配置 ==========
+ai:
+  # 当前支持: zhipu (推荐), qwen
+  provider: "qwen"
+  
+  # 阿里通义千问配置 (DashScope)
+  # 申请地址：https://dashscope.console.aliyun.com/
+  qwen:
+    api_key: "sk-d14008766eb14b4b8520f082186d59aa"
+    model: "qwen-vl-plus"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+  # 智谱 AI 配置（免费、强大）
+  # 申请地址：https://open.bigmodel.cn/
+  zhipu:
+    api_key: "701f8ed339574404978506575ef71737.6kjtwTaBY2PBTAbr"
+    model: "glm-4v-flash"
+
+
+
+# ========== 视频处理配置 ==========
+video:
+  # 关键帧提取间隔（秒）
+  # 值越小分析越精细，但处理时间更长
+  frame_interval: 0.1
+  
+  # 最大提取帧数（防止超长视频）
+  max_frames: 200
+  
+  # 支持的视频格式
+  supported_formats:
+    - ".mp4"
+    - ".mov"
+    - ".avi"
+    - ".mkv"
+    - ".wmv"
+    - ".flv"
+
+# ========== 审核规则配置 ==========
+review:
+  # 审核类别及其开关
+  categories:
+    # 内容合规性审核
+    content_compliance:
+      enabled: true
+      check_items:
+        - "违法违规内容（黄赌毒、暴力等）"
+        - "不当言论或手势"
+        - "敏感信息泄露（身份证、电话号码等）"
+        - "未经授权的第三方内容"
+    
+    # 品牌相关性审核
+    brand_relevance:
+      enabled: true
+      check_items:
+        - "产品展示是否正确"
+        - "是否有竞品露出"
+        - "是否符合品牌调性"
+        - "logo 使用是否规范"
+    
+    # 视频质量审核
+    video_quality:
+      enabled: true
+      check_items:
+        - "画面清晰度"
+        - "是否有明显瑕疵或抖动"
+        - "音画同步"
+        - "画面构图"
+  
+  # 自定义审核提示（会追加到 AI 提示词中）
+  custom_prompt: |
+    【我家品牌】：Mico（这是我们的官方 App，绝对严禁判定为违规！）。
+    
+    【竞品定义】：仅指与 Mico 存在直接竞争关系的“小组件 (Widgets)”、“主题 (Themes)”、“图标美化”类 App。
+    
+    【核心判定规则】：
+    1. 必须判定为严重违规 (Critical) 的竞品：
+       - iScreen, Widgetsmith, Color Widgets, MD Clock, Top Widgets (万能小组件), Locket, Widgetable 等。
+       - 只要画面中出现这些 App 的名称、图标或 Logo，即为严重违规。
+    
+    2. 允许出现的非竞品内容（绝对不要判定为违规）：
+       - 我家 App：Mico（核心保护名单）。
+       - 社交/工具/系统类：TikTok, Instagram, WhatsApp, PayPal, App Store 等常见大众软件。
+    
+    3. 低质/非精品内容（需标记为质量问题）：
+       - 处理建议：判定为“画面质量问题”，严重程度设为 medium。
+    
+    【判定逻辑】：
+    - 第一步：列出画面中可见的所有 App 名称。
+    - 第二步：对比违规清单。只有名称或图标完全匹配“第 1 类（组件/美化类）竞品”时，has_issue 才为 true。
+    - 第三步：如果只是 Mico 或第 2 类社交/游戏 App，has_issue 必须为 false。
+    - 请极其谨慎地标记违规，避免捕风捉影。不要将普通的社交或照片编辑工具（如 Bestie）误标为小组件竞品。
+
+# ==== 新的改进 Prompt（保留旧的，供回退） ==== 
+# 下面的 prompt 为改进版，使用结构化、分步指示并强制 JSON 输出。
+# 请将其放在 `custom_prompt_v2` 键下，保持原有 `custom_prompt` 不变，以便回退。
+
+  custom_prompt_v2: |
+    【品牌信息】：
+    - 品牌名称：Mico（官方 App，禁止误判为违规）。
+    - 竞品定义：与 Mico 直接竞争的“小组件 (Widgets)”、主题 (Themes)、图标美化类 App。
+    
+    【核心判定规则】：
+    1️⃣ **严重违规（Critical）**：出现以下任意竞品名称、图标或 Logo 时，判定为严重违规并返回 `has_issue: true`。
+       - iScreen、Widgetsmith、Color Widgets、MD Clock、Top Widgets、Locket、Widgetable 等。
+    2️⃣ **允许出现的非竞品**：以下内容**绝不**判定为违规。
+       - Mico 本身及其官方 UI。
+       - 常见社交/工具/系统类软件：TikTok、Instagram、WhatsApp、PayPal、App Store 等。
+    3️⃣ **低质/非精品内容**：若画面质量欠佳（模糊、抖动、音画不同步等），返回 `issue_type: "quality"`，严重程度设为 `medium`。
+    
+    【判定流程】（请模型严格按顺序执行）:
+    - 步骤 1：列出画面中出现的所有 App 名称、图标或文字。
+    - 步骤 2：对照 “严重违规” 列表，若完全匹配则 `has_issue = true`，返回对应竞品名称。
+    - 步骤 3：若仅出现 “允许出现的非竞品”，则 `has_issue = false`。
+    - 步骤 4：若画面质量不佳但未触发违规，返回 `issue_type = "quality"`。
+    
+    【输出格式】（请严格遵守 JSON）:
+    ```json
+    {
+      "has_issue": true|false,
+      "issue_type": "competitor|quality|none",
+      "details": "简要说明检测到的违规或质量问题"
+    }
+    ```
+    
+    请 **仅** 返回上述 JSON，不要出现额外解释或说明文字。
+
+# ========== 路径配置 ==========
+paths:
+  # 下载的视频存放目录
+  downloads: "./downloads"
+  # 截图存放目录
+  screenshots: "./screenshots"
+  # 报告存放目录
+  reports: "./reports"
+
+# ========== 报告配置 ==========
+report:
+  # 报告格式: html, markdown
+  format: "html"
+  # 是否在报告中嵌入截图（base64）
+  embed_screenshots: true
+  # 公司/项目名称（显示在报告标题）
+  company_name: "素材审核系统"
+
