@@ -51,7 +51,7 @@ video:
   # 例如：extract_fps: 2 表示每秒抽取 2 帧
   # 值越大分析越精细，但处理时间和成本更高
   # 建议：静态内容 1-2 fps，快速变化内容 3-5 fps
-  extract_fps: 4
+  extract_fps: 3
   
   # 旧配置方式（二选一，extract_fps 优先）：
   # frame_interval: 0.5  # 每 0.5 秒抽一帧
@@ -62,7 +62,7 @@ video:
   # 网格拼图配置（用于减少 AI API 调用次数）
   # grid_cols: 网格列数，如 4 表示 4x4=16 帧拼成一张图
   # 建议：追求极致准确使用 3 或 4；追求极致性价比使用 5 或 6
-  grid_cols: 4
+  grid_cols: 1
   
   # 单元格宽度（像素），建议 640 或以上以保证清晰度
   cell_width: 640
@@ -116,7 +116,7 @@ review:
     【核心判定规则】：
     1. 必须判定为严重违规 (Critical) 的竞品：
        - iScreen, Widgetsmith, Color Widgets, MD Clock, Top Widgets (万能小组件), Locket, Widgetable, Temas 等。
-       - 只要画面中出现这些 App 的名称、图标或 Logo，即为严重违规。
+       - 只要画面中的手机上出现这些 App 的名称、图标或 Logo，即为严重违规。
     
     2. 允许出现的非竞品内容（绝对不要判定为违规）：
        - 我家 App：Mico（核心保护名单）。
@@ -126,7 +126,7 @@ review:
        - 处理建议：判定为“画面质量问题”，严重程度设为 medium。
     
     【判定逻辑】：
-    - 第一步：列出画面中可见的所有 App 名称。
+    - 第一步：列出画面中的手机上可见的所有 App 名称。
     - 第二步：对比违规清单。只有名称或图标完全匹配“第 1 类（组件/美化类）竞品”时，has_issue 才为 true。
     - 第三步：如果只是 Mico 或第 2 类社交/游戏 App，has_issue 必须为 false。
     - 请极其谨慎地标记违规，避免捕风捉影。不要将普通的社交或照片编辑工具（如 Bestie）误标为小组件竞品。

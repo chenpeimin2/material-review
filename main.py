@@ -103,7 +103,8 @@ def test_ai():
 @cli.command()
 @click.option('--file', '-f', 'video_file', default=None, help='指定视频文件路径')
 @click.option('--max-frames', '-n', default=200, help='最大提取帧数')
-def test_video(video_file, max_frames):
+@click.option('--fps', default=None, type=float, help='抽帧频率 (FPS)，覆盖配置')
+def test_video(video_file, max_frames, fps):
     """测试视频预处理功能"""
     console.print(Panel("[bold]测试视频预处理[/]", style="blue"))
     
@@ -153,10 +154,10 @@ def test_video(video_file, max_frames):
         console.print("[red]✗ 视频信息获取失败[/]")
         sys.exit(1)
     
-    # 测试2: 提取关键帧
-    frame_interval = video_config.get('frame_interval', 1)
-    console.print(f"\n[bold cyan]测试2: 提取视频关键帧 ({frame_interval}秒1帧，最多{max_frames}帧)[/]")
-    frames = processor.extract_frames(test_video_path, interval_seconds=frame_interval, max_frames=max_frames)
+    # 测试2: 提取关键帧（使用 FPS）
+    effective_fps = fps if fps is not None else video_config.get('extract_fps', 4)
+    console.print(f"\n[bold cyan]测试2: 提取视频关键帧（每秒 {effective_fps} 帧，最多 {max_frames} 帧）[/]")
+    frames = processor.extract_frames(test_video_path, fps=effective_fps, max_frames=max_frames)
     if frames:
         # 创建帧保存目录
         video_name = Path(test_video_path).stem
@@ -255,9 +256,7 @@ def test_scene(video_file, threshold, min_interval, max_frames):
 
 @cli.command()
 @click.option('--file', '-f', 'video_file', required=True, help='指定视频文件路径')
-@click.option('--fps', default=4, help='抽帧频率 (FPS)')
-@click.option('--cols', default=6, help='网格列数 (如 6 表示 6x6 网格)')
-def test_grid(video_file, fps, cols):
+def test_grid(video_file):
     """测试网格拼图生成（将多帧合成一张图）"""
     console.print(Panel("[bold]网格拼图测试[/]", style="blue"))
     
@@ -331,7 +330,7 @@ def test_image(image_path, grid):
         prompt = f"""你是一个极致严谨视频内容审核专家。
 
 【上下文】
-这是一张网格拼图。每张小图左上角有时间戳标签（例如 0:15.50）。
+这是一张网格拼图。
 
 【核心任务】
 请仔细检查每一格画面，列出你看到的【所有】应用名称、图标和品牌。特别要注意角落处（如右下角）的细节，以及 App Store 搜索结果列表。
@@ -412,7 +411,8 @@ def test_image(image_path, grid):
             
             response = client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": content}]
+                messages=[{"role": "user", "content": content}],
+                temperature=0
             )
             
             response_text = response.choices[0].message.content
@@ -429,6 +429,34 @@ def test_image(image_path, grid):
                 json_str = response_text.strip()
             
             result = json.loads(json_str)
+            # 关键词后备匹配（与主流程对齐）
+            competitor_keywords = {
+                'iscreen', 'widgetsmith', 'color widgets', 'color widget',
+                'md clock', 'top widgets', 'topwidgets', '万能小组件',
+                'locket', 'widgetable', 'temas', 'screenkit', 'themify',
+                'photo widget', 'photowidget'
+            }
+            visible_list = result.get('all_visible_apps') if grid else result.get('visible_content')
+            hit = None
+            if visible_list:
+                apps_norm = [str(a).lower() for a in visible_list]
+                for a in apps_norm:
+                    for kw in competitor_keywords:
+                        if kw in a:
+                            hit = kw
+                            break
+                    if hit:
+                        break
+            if hit and not result.get('has_issue'):
+                result['has_issue'] = True
+                result.setdefault('issues', [])
+                result['issues'].append({
+                    'timestamp': '单图',
+                    'category': '竞品品牌露出',
+                    'description': f'检测到竞品关键词：{hit}',
+                    'severity': 'critical',
+                    'suggestion': ''
+                })
             
             console.print("\n" + "="*50)
             if result.get('has_issue'):
@@ -478,7 +506,8 @@ def test_image(image_path, grid):
             
             response = client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": content}]
+                messages=[{"role": "user", "content": content}],
+                temperature=0
             )
             
             response_text = response.choices[0].message.content
@@ -495,6 +524,34 @@ def test_image(image_path, grid):
                 json_str = response_text.strip()
             
             result = json.loads(json_str)
+            # 关键词后备匹配（与主流程对齐）
+            competitor_keywords = {
+                'iscreen', 'widgetsmith', 'color widgets', 'color widget',
+                'md clock', 'top widgets', 'topwidgets', '万能小组件',
+                'locket', 'widgetable', 'temas', 'screenkit', 'themify',
+                'photo widget', 'photowidget'
+            }
+            visible_list = result.get('all_visible_apps') if grid else result.get('visible_content')
+            hit = None
+            if visible_list:
+                apps_norm = [str(a).lower() for a in visible_list]
+                for a in apps_norm:
+                    for kw in competitor_keywords:
+                        if kw in a:
+                            hit = kw
+                            break
+                    if hit:
+                        break
+            if hit and not result.get('has_issue'):
+                result['has_issue'] = True
+                result.setdefault('issues', [])
+                result['issues'].append({
+                    'timestamp': '单图',
+                    'category': '竞品品牌露出',
+                    'description': f'检测到竞品关键词：{hit}',
+                    'severity': 'critical',
+                    'suggestion': ''
+                })
             
             console.print("\n" + "="*50)
             if result.get('has_issue'):
@@ -706,12 +763,8 @@ def review(video_file, download_first, sender, since):
             console.print(f"[red]✗ 无法提取视频帧，跳过[/]")
             continue
         
-        # 创建网格图（拼图模式，减少 API 调用）
-        grid_cols = video_config.get('grid_cols', 4)  # 默认 4x4 网格
-        grids = processor.create_frame_grid(frames, cols=grid_cols)
-        
-        # AI 审核（使用网格模式）
-        result = reviewer.review_video(frames, video_path, grids=grids)
+        # AI 审核（逐帧模式）
+        result = reviewer.review_video(frames, video_path)
         if not result:
             console.print(f"[red]✗ AI 审核出现严重错误，停止后续审核[/]")
             break

@@ -330,9 +330,37 @@ class AIReviewer:
                                     'suggestion': issue.get('suggestion', '')
                                 })
                             
-                            # 优化: 发现一个问题就停止继续审核（响应用户要求）
+                            # 优化: 发现一个问题就停止进一步审核（响应用户要求）
                             console.print(f"[yellow]停止进一步分析以节省资源[/]")
                             break
+                        else:
+                            contents = frame_result.get('visible_content') or []
+                            contents_norm = [str(c).lower() for c in contents]
+                            competitor_keywords = {
+                                'iscreen', 'widgetsmith', 'color widgets', 'color widget',
+                                'md clock', 'top widgets', 'topwidgets', '万能小组件',
+                                'locket', 'widgetable', 'temas', 'screenkit', 'themify',
+                                'photo widget', 'photowidget'
+                            }
+                            hit = None
+                            for c in contents_norm:
+                                for kw in competitor_keywords:
+                                    if kw in c:
+                                        hit = kw
+                                        break
+                                if hit:
+                                    break
+                            if hit:
+                                all_issues.append({
+                                    'frame_index': idx,
+                                    'category': '竞品品牌露出',
+                                    'description': f'检测到竞品关键词：{hit}',
+                                    'severity': 'critical',
+                                    'suggestion': ''
+                                })
+                                console.print(f"[yellow]‼ 通过关键词命中竞品: {hit}[/]")
+                                console.print(f"[yellow]停止进一步分析以节省资源[/]")
+                                break
                     except Exception as e:
                         api_error_count += 1
                         error_msg = str(e)
@@ -404,7 +432,6 @@ class AIReviewer:
 
 【上下文】
 这是一张包含 {self.review_config.get('grid_cols', 4)}x{self.review_config.get('grid_cols', 4)} 帧画面的网格拼图。
-每张小图左上角有黑色背景的时间戳标签（例如 0:15.50）。
 
 【核心任务】
 请仔细检查每个格子，列出你能看到的【所有】App 名称和品牌，尤其要注意：
@@ -511,6 +538,35 @@ class AIReviewer:
                             # 发现问题后立即停止
                             console.print(f"[yellow]发现问题，停止进一步分析以节省资源[/]")
                             break
+                        else:
+                            apps = grid_result.get('all_visible_apps') or []
+                            apps_norm = [str(a).lower() for a in apps]
+                            competitor_keywords = {
+                                'iscreen', 'widgetsmith', 'color widgets', 'color widget',
+                                'md clock', 'top widgets', 'topwidgets', '万能小组件',
+                                'locket', 'widgetable', 'temas', 'screenkit', 'themify',
+                                'photo widget', 'photowidget'
+                            }
+                            hit = None
+                            for a in apps_norm:
+                                for kw in competitor_keywords:
+                                    if kw in a:
+                                        hit = kw
+                                        break
+                                if hit:
+                                    break
+                            if hit:
+                                ts_fallback = timestamps[0] if timestamps else 0
+                                all_issues.append({
+                                    'timestamp': ts_fallback,
+                                    'category': '竞品品牌露出',
+                                    'description': f'检测到竞品关键词：{hit}',
+                                    'severity': 'critical',
+                                    'suggestion': ''
+                                })
+                                console.print(f"[yellow]‼ 通过关键词命中竞品: {hit}[/]")
+                                console.print(f"[yellow]发现问题，停止进一步分析以节省资源[/]")
+                                break
                             
                     except Exception as e:
                         console.print(f"[yellow]⚠ 网格图 {grid_idx+1} 分析失败: {str(e)[:50]}[/]")
