@@ -924,5 +924,55 @@ def format_size(size: int) -> str:
     return f"{size:.1f} TB"
 
 
+@cli.command()
+@click.option('--include-downloads', is_flag=True, help='同时删除下载的视频文件')
+def clean(include_downloads):
+    """清理缓存文件（报告、截图等）"""
+    import shutil
+    
+    console.print(Panel("[bold]清理缓存文件[/]", style="blue"))
+    
+    config = load_config()
+    paths = config.get('paths', {})
+    
+    dirs_to_clean = {
+        'screenshots': paths.get('screenshots', './screenshots'),
+        'reports': paths.get('reports', './reports')
+    }
+    
+    if include_downloads:
+        dirs_to_clean['downloads'] = paths.get('downloads', './downloads')
+        
+    cleaned_count = 0
+    cleaned_size = 0
+    
+    for name, path_str in dirs_to_clean.items():
+        path = Path(path_str)
+        if not path.exists():
+            continue
+            
+        console.print(f"正在清理 {name} ({path})...")
+        
+        for item in path.iterdir():
+            try:
+                if item.is_file():
+                    size = item.stat().st_size
+                    item.unlink()
+                    cleaned_count += 1
+                    cleaned_size += size
+                elif item.is_dir():
+                    # 计算目录大小
+                    for f in item.rglob('*'):
+                        if f.is_file():
+                            cleaned_size += f.stat().st_size
+                    shutil.rmtree(item)
+                    cleaned_count += 1
+            except Exception as e:
+                console.print(f"[red]删除 {item} 失败: {e}[/]")
+                
+    size_mb = cleaned_size / (1024 * 1024)
+    console.print(f"\n[green]✓ 清理完成[/]")
+    console.print(f"共删除 {cleaned_count} 个项目，释放空间 {size_mb:.2f} MB")
+
 if __name__ == '__main__':
     cli()

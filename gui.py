@@ -112,6 +112,7 @@ class MaterialReviewGUI:
         ttk.Button(group_tools, text="测试邮箱连接", command=lambda: self.run_command([sys.executable, self.main_script, 'test-email'])).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="测试 AI 连接", command=lambda: self.run_command([sys.executable, self.main_script, 'test-ai'])).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="打开报告目录", command=lambda: self.run_command(['open', os.path.join(self.base_path, 'reports')])).pack(pady=2, fill=tk.X)
+        ttk.Button(group_tools, text="清除所有缓存", command=self.clear_cache).pack(pady=2, fill=tk.X)
 
         # === 右侧的日志面板 ===
         ttk.Label(right_frame, text="运行日志:").pack(anchor="w")
@@ -321,6 +322,12 @@ class MaterialReviewGUI:
             cmd.extend(['-d', date])
             
         self.run_command(cmd)
+
+    def clear_cache(self):
+        """清除缓存"""
+        if messagebox.askyesno("确认清理", "确定要清空所有报告、截图和下载的视频吗？\n\n这将删除 'reports', 'screenshots' 和 'downloads' 目录下的所有文件。"):
+            # 添加 --include-downloads 标志以清理所有内容
+            self.run_command([sys.executable, self.main_script, 'clean', '--include-downloads'])
 
     def run_command(self, cmd):
         """运行命令并更新UI"""
