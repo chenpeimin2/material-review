@@ -7,6 +7,9 @@ import imaplib
 import email
 import hashlib
 import uuid
+import time
+import socket
+import re
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 from email.message import Message
@@ -14,7 +17,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
-import re
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -66,7 +68,7 @@ class EmailHandler:
         self.username = config['username']
         self.password = config['password']
         self.filter_config = config.get('filter', {})
-        self.connetcion: Optional[imaplib.IMAP4_SSL] = None
+        self.connection: Optional[imaplib.IMAP4_SSL] = None
 
         if 'ID' not in imaplib.Commands:
             imaplib.Commands['ID'] = ('AUTH',)
@@ -81,7 +83,10 @@ class EmailHandler:
             self.connection = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
             self.connection.login(self.username, self.password)
             self._send_id()
-            self.connection.select('INBOX')
+            try:
+                self.connection.select('INBOX')
+            except Exception:
+                pass
             console.print("[green]✓ 邮箱连接成功[/]")
             return True
         except Exception as e:
@@ -102,6 +107,38 @@ class EmailHandler:
             self.connection._simple_command('ID', args)
         except Exception:
             pass
+
+    # =========================
+    # 辅助方法：安全 Fetch
+    # =========================
+    
+    def _safe_fetch(self, email_id, message_parts, retries=3):
+        """带有重试机制的 Fetch"""
+        for attempt in range(retries):
+            try:
+                if self.connection is None:
+                    if not self.connect():
+                        raise ConnectionError("无法连接到 IMAP 服务器")
+                
+                # 检查 email_id 类型，如果是 str 则编码为 bytes
+                eid = email_id.encode() if isinstance(email_id, str) else email_id
+                
+                return self.connection.fetch(eid, message_parts)
+                
+            except (imaplib.IMAP4.abort, socket.error, ConnectionResetError, BrokenPipeError) as e:
+                console.print(f"[yellow]⚠ 连接中断 ({e})，正在重试 ({attempt+1}/{retries})...[/]")
+                self.disconnect()
+                time.sleep(2)
+                # 重新连接
+                if attempt < retries - 1:
+                    self.connect()
+                    # 重新选择 INBOX
+                    try:
+                        self.connection.select('INBOX')
+                    except:
+                        pass
+        
+        raise ConnectionError(f"在 {retries} 次尝试后 fetching 失败")
 
     # =========================
     # 搜索邮件
@@ -136,8 +173,15 @@ class EmailHandler:
 
         if not criteria:
             criteria = ['ALL']
+            
+        try:
+            status, data = self.connection.search(None, *criteria)
+        except Exception:
+            # 搜索失败尝试重连一次
+            self.disconnect()
+            self.connect()
+            status, data = self.connection.search(None, *criteria)
 
-        status, data = self.connection.search(None, *criteria)
         if status != 'OK':
             return []
 
@@ -166,7 +210,15 @@ class EmailHandler:
             
             for i in range(total_to_scan):
                 email_id = email_ids[i]
-                status, msg_data = self.connection.fetch(email_id, '(RFC822)')
+                
+                try:
+                    # 使用 safe_fetch 替代直接 fetch
+                    status, msg_data = self._safe_fetch(email_id, '(RFC822)')
+                except Exception as e:
+                    console.print(f"[red]获取邮件 {email_id} 失败: {e}[/]")
+                    progress.update(task, advance=1)
+                    continue
+                    
                 if status != 'OK':
                     progress.update(task, advance=1)
                     continue
@@ -174,7 +226,9 @@ class EmailHandler:
                 msg = email.message_from_bytes(msg_data[0][1])
 
                 attachments = self._extract_attachment_names(msg)
-                if not any(self._is_video(f) for f in attachments):
+                
+                # 如果需要筛选视频且没有视频附件，跳过
+                if only_with_video and not any(self._is_video(f) for f in attachments):
                     progress.update(task, advance=1)
                     continue
 
@@ -199,7 +253,12 @@ class EmailHandler:
         save_path = Path(save_dir)
         save_path.mkdir(parents=True, exist_ok=True)
 
-        status, msg_data = self.connection.fetch(email_id.encode(), '(RFC822)')
+        try:
+            status, msg_data = self._safe_fetch(email_id, '(RFC822)')
+        except Exception as e:
+            console.print(f"[red]下载邮件 {email_id} 内容失败: {e}[/]")
+            return []
+            
         if status != 'OK':
             return []
 
@@ -220,30 +279,35 @@ class EmailHandler:
             if not payload:
                 continue
 
+            # 使用安全文件名
+            subject = self._decode(msg.get('Subject')) or 'unknown'
+            safe_subject = re.sub(r'[\\/*?:"<>|]', '', subject)
+            safe_subject = safe_subject.strip()[:50]
+            if not safe_subject:
+                safe_subject = 'unknown'
+            
+            ext = Path(filename).suffix.lower()
+            video_id = str(uuid.uuid4())
+            short_id = video_id[:8]
+            
+            stored_name = f"{safe_subject}_{short_id}{ext}"
+            filepath = save_path / stored_name
+            
+            # 校验大小限制
             if len(payload) > self.MAX_ATTACHMENT_SIZE:
                 console.print(f"[yellow]跳过超大文件：{filename}[/]")
                 continue
 
-            video_id = str(uuid.uuid4())
-            ext = Path(filename).suffix.lower()
-            
-            # 使用邮件主题作为文件名，清理不合法字符
-            subject = self._decode(msg.get('Subject')) or 'unknown'
-            # 移除文件名中不允许的字符
-            safe_subject = re.sub(r'[\\/*?:"<>|]', '', subject)
-            safe_subject = safe_subject.strip()[:50]  # 限制长度
-            if not safe_subject:
-                safe_subject = 'unknown'
-            
-            # 主题名 + 短UUID后缀（防止重名）
-            short_id = video_id[:8]
-            stored_name = f"{safe_subject}_{short_id}{ext}"
-            filepath = save_path / stored_name
+            # 写入文件
+            try:
+                with open(filepath, 'wb') as f:
+                    f.write(payload)
+            except Exception as e:
+                console.print(f"[red]写入文件失败: {e}[/]")
+                continue
 
             sha256 = hashlib.sha256(payload).hexdigest()
-            with open(filepath, 'wb') as f:
-                f.write(payload)
-
+            
             downloaded.append(DownloadedAttachment(
                 video_id=video_id,
                 original_filename=filename,

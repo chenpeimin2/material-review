@@ -242,7 +242,9 @@ class AIReviewer:
    - 如果是黑名单竞品（Widgetsmith, iScreen等） -> has_issue: true, category: "竞品品牌露出", severity: "critical"。
    - 如果是非精品内容（Roblox, Hole.io等） -> has_issue: true, category: "画面质量问题", severity: "medium"。
 
-请严格按以下 JSON 格式回复（不要有任何开场白或结尾）：
+4. 输出必须要合法 JSON 格式。字符串中如果包含双引号，必须使用转义符 (\\")。
+
+请严格按以下 JSON 格式回复（绝对禁止任何开场白或结尾，只返回 JSON）：
 ```json
 {{
     "visible_content": ["App名称(位置)", "App名称(位置)"],
@@ -303,7 +305,7 @@ class AIReviewer:
                         api_error_count = 0  # 成功则重置错误计数
                         response_text = response.choices[0].message.content
                         
-                        # 提取 JSON
+                        # 提取 JSON Content
                         if "```json" in response_text:
                             json_str = response_text.split("```json")[1].split("```")[0].strip()
                         elif "```" in response_text:
@@ -311,7 +313,21 @@ class AIReviewer:
                         else:
                             json_str = response_text.strip()
                         
-                        frame_result = json.loads(json_str)
+                        # 尝试多种方式解析
+                        try:
+                            frame_result = json.loads(json_str)
+                        except json.JSONDecodeError:
+                            # 尝试修复常见的单引号问题
+                            try:
+                                import ast
+                                frame_result = ast.literal_eval(json_str)
+                            except Exception:
+                                # 最后的尝试：清理可能导致 JSON 错误的控制字符
+                                try:
+                                    clean_str = json_str.replace('\n', ' ').replace('\r', '')
+                                    frame_result = json.loads(clean_str)
+                                except Exception:
+                                    raise ValueError(f"无法解析 JSON: {json_str[:50]}...")
                         
                         # 收集描述
                         frame_descriptions.append(f"[{minutes}:{seconds:.0f}] {frame_result.get('description', '')}")
