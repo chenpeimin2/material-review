@@ -28,7 +28,7 @@ email:
 # ========== AI 审核配置 ==========
 ai:
   # 当前支持: zhipu (推荐), qwen
-  provider: "qwen"
+  provider: "zhipu"
   
   # 阿里通义千问配置 (DashScope)
   # 申请地址：https://dashscope.console.aliyun.com/
@@ -41,7 +41,7 @@ ai:
   # 申请地址：https://open.bigmodel.cn/
   zhipu:
     api_key: "701f8ed339574404978506575ef71737.6kjtwTaBY2PBTAbr"
-    model: "glm-4v-flash"
+    model: "glm-4.6v-flash"
 
 
 

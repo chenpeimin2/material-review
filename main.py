@@ -67,10 +67,10 @@ def test_email():
     config = load_config()
     email_config = config.get('email', {})
     
-    if test_connection(email_config):
-        console.print("\n[green]✓ 邮箱连接测试成功！[/]")
+    handler = EmailHandler(email_config)
+    if handler.connect():
+        handler.disconnect()
     else:
-        console.print("\n[red]✗ 邮箱连接测试失败[/]")
         console.print("[yellow]请检查以下内容：[/]")
         console.print("  1. 邮箱账号是否正确")
         console.print("  2. 授权码是否正确（不是登录密码）")
@@ -256,7 +256,9 @@ def test_scene(video_file, threshold, min_interval, max_frames):
 
 @cli.command()
 @click.option('--file', '-f', 'video_file', required=True, help='指定视频文件路径')
-def test_grid(video_file):
+@click.option('--fps', default=1.0, help='抽帧频率')
+@click.option('--cols', default=3, help='网格列数')
+def test_grid(video_file, fps, cols):
     """测试网格拼图生成（将多帧合成一张图）"""
     console.print(Panel("[bold]网格拼图测试[/]", style="blue"))
     
@@ -632,10 +634,11 @@ def download(sender, since, subject):
         
         console.print(table)
         
-        # 确认下载
-        if not click.confirm('\n是否下载这些视频附件？', default=True):
-            console.print("[yellow]已取消[/]")
-            return
+        # 确认下载 (GUI 模式下直接下载，不询问)
+        # if not click.confirm('\n是否下载这些视频附件？', default=True):
+        #     console.print("[yellow]已取消[/]")
+        #     return
+        console.print(f"[cyan]准备下载 {len(emails)} 封邮件的附件...[/]")
         
         # 下载所有附件
         all_downloaded = []
