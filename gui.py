@@ -193,8 +193,18 @@ class MaterialReviewGUI:
             return
             
         try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f) or {}
+            config = None
+            for enc in ['utf-8', 'utf-8-sig', 'gb18030', 'gbk', 'cp936']:
+                try:
+                    with open(self.config_path, 'r', encoding=enc) as f:
+                        config = yaml.safe_load(f) or {}
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if config is None:
+                with open(self.config_path, 'rb') as f:
+                    text = f.read().decode('utf-8', errors='replace')
+                config = yaml.safe_load(text) or {}
                 
             email_conf = config.get('email', {})
             self.imap_server_var.set(email_conf.get('imap_server', ''))
@@ -235,8 +245,18 @@ class MaterialReviewGUI:
 
         try:
             # 先读取现有配置以保留其他字段
-            with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f) or {}
+            config = None
+            for enc in ['utf-8', 'utf-8-sig', 'gb18030', 'gbk', 'cp936']:
+                try:
+                    with open(self.config_path, 'r', encoding=enc) as f:
+                        config = yaml.safe_load(f) or {}
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if config is None:
+                with open(self.config_path, 'rb') as f:
+                    text = f.read().decode('utf-8', errors='replace')
+                config = yaml.safe_load(text) or {}
             
             # 更新邮箱配置
             if 'email' not in config:
@@ -351,6 +371,7 @@ class MaterialReviewGUI:
                     stderr=subprocess.STDOUT,
                     text=True,
                     encoding='utf-8',
+                    errors='replace',
                     bufsize=1,
                     env=env
                 )

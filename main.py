@@ -37,8 +37,16 @@ def load_config() -> dict:
         console.print("[yellow]请先复制 config.yaml.example 并填写配置[/]")
         sys.exit(1)
     
-    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+    encodings = ['utf-8', 'utf-8-sig', 'gb18030', 'gbk', 'cp936']
+    for enc in encodings:
+        try:
+            with open(CONFIG_PATH, 'r', encoding=enc) as f:
+                return yaml.safe_load(f) or {}
+        except UnicodeDecodeError:
+            continue
+    with open(CONFIG_PATH, 'rb') as f:
+        text = f.read().decode('utf-8', errors='replace')
+    return yaml.safe_load(text) or {}
 
 
 def ensure_directories(config: dict):
