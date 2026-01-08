@@ -28,7 +28,7 @@ email:
 # ========== AI 审核配置 ==========
 ai:
   # 当前支持: zhipu (推荐), qwen
-  provider: "zhipu"
+  provider: "qwen"
   
   # 阿里通义千问配置 (DashScope)
   # 申请地址：https://dashscope.console.aliyun.com/
