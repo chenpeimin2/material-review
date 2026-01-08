@@ -19,11 +19,6 @@ from rich.panel import Panel
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.email_handler import EmailHandler
-from src.video_processor import VideoProcessor
-from src.ai_reviewer import AIReviewer
-from src.report_generator import ReportGenerator
-
 console = Console()
 
 # 配置文件路径
@@ -75,6 +70,7 @@ def test_email():
     config = load_config()
     email_config = config.get('email', {})
     
+    from src.email_handler import EmailHandler
     handler = EmailHandler(email_config)
     if handler.connect():
         handler.disconnect()
@@ -98,6 +94,7 @@ def test_ai():
     # 合并配置
     full_config = {**ai_config, 'review': review_config}
     
+    from src.ai_reviewer import AIReviewer
     reviewer = AIReviewer(full_config)
     
     if reviewer.test_connection():
@@ -141,6 +138,7 @@ def test_video(video_file, max_frames, fps):
         console.print(f"[dim]自动选择视频：{videos[0].name}[/]")
     
     video_config = config.get('video', {})
+    from src.video_processor import VideoProcessor
     processor = VideoProcessor(video_config)
     
     # 测试1: 获取视频信息
@@ -222,6 +220,7 @@ def test_scene(video_file, threshold, min_interval, max_frames):
         sys.exit(1)
     
     video_config = config.get('video', {})
+    from src.video_processor import VideoProcessor
     processor = VideoProcessor(video_config)
     
     # 获取视频信息
@@ -283,6 +282,7 @@ def test_grid(video_file, fps, cols):
     video_config = config.get('video', {})
     # 临时修改配置用于测试
     test_config = {**video_config, 'extract_fps': fps, 'grid_cols': cols}
+    from src.video_processor import VideoProcessor
     processor = VideoProcessor(test_config)
     
     # 1. 提取帧
@@ -601,6 +601,7 @@ def download(sender, since, subject):
     download_path = paths.get('downloads', './downloads')
     
     # 创建邮件处理器
+    from src.email_handler import EmailHandler
     handler = EmailHandler(email_config)
     
     if not handler.connect():
@@ -749,6 +750,9 @@ def review(video_file, download_first, sender, since):
     review_config = config.get('review', {})
     report_config = config.get('report', {})
     
+    from src.video_processor import VideoProcessor
+    from src.ai_reviewer import AIReviewer
+    from src.report_generator import ReportGenerator
     processor = VideoProcessor(video_config)
     reviewer = AIReviewer({**ai_config, 'review': review_config})
     generator = ReportGenerator(report_config)

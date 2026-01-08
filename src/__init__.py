@@ -1,14 +1,5 @@
 # 素材视频审核工作流
 # Video Review Workflow
 
-from .email_handler import EmailHandler
-from .video_processor import VideoProcessor
-from .ai_reviewer import AIReviewer
-from .report_generator import ReportGenerator
-
-__all__ = [
-    "EmailHandler",
-    "VideoProcessor", 
-    "AIReviewer",
-    "ReportGenerator",
-]
+# 为避免导入包时触发重量级依赖（如 cv2），不在此处做顶层重导入
+__all__ = ["EmailHandler", "VideoProcessor", "AIReviewer", "ReportGenerator"]
