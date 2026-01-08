@@ -141,6 +141,7 @@ class MaterialReviewGUI:
         ttk.Button(group_tools, text="打开下载目录", command=self.open_downloads_dir).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="打开截图目录", command=self.open_screenshots_dir).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="打开报告目录", command=self.open_reports_dir).pack(pady=2, fill=tk.X)
+        ttk.Button(group_tools, text="查看审核规则", command=self.open_config_file).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="清除所有缓存", command=self.clear_cache).pack(pady=2, fill=tk.X)
 
         # === 右侧的日志面板 ===
@@ -445,6 +446,21 @@ class MaterialReviewGUI:
             self._open_dir(screenshots_dir)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开截图目录: {e}")
+    
+    def open_config_file(self):
+        try:
+            if not os.path.exists(self.config_path):
+                messagebox.showerror("错误", "配置文件不存在")
+                return
+            if sys.platform == 'darwin':
+                self.run_command(['open', self.config_path])
+            elif sys.platform.startswith('win'):
+                self.run_command(['explorer', self.config_path])
+            else:
+                self.run_command(['xdg-open', self.config_path])
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开配置文件: {e}")
+    
 
     def run_command(self, cmd):
         """运行命令并更新UI"""

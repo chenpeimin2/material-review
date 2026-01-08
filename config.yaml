@@ -78,6 +78,33 @@ video:
 
 # ========== 审核规则配置 ==========
 review:
+  mode: "keyword"
+  stop_on_first_issue: true
+  ignore_quality: true
+  severity_weights: { low: 5, medium: 10, high: 20, critical: 40 }
+  allow_list:
+    - Mico
+    - TikTok
+    - Instagram
+    - WhatsApp
+    - PayPal
+    - App Store
+  competitor_list:
+    - iScreen
+    - Widgetsmith
+    - Color Widgets
+    - MD Clock
+    - Top Widgets
+    - 万能小组件
+    - Locket
+    - Widgetable
+    - ScreenKit
+    - Themify
+    - Photo Widget
+    - PhotoWidget
+  quality_list:
+    - Roblox
+    - Hole.io
   # 审核类别及其开关
   categories:
     # 内容合规性审核
@@ -182,4 +209,3 @@ report:
   embed_screenshots: true
   # 公司/项目名称（显示在报告标题）
   company_name: "素材审核系统"
-

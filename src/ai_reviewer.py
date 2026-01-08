@@ -76,6 +76,42 @@ class AIReviewer:
         self.config = config
         self.provider = config.get('provider', 'zhipu')
         self.review_config = config.get('review', {})
+        rules_file = (self.review_config.get('rules_file') or '').strip()
+        if rules_file:
+            try:
+                from pathlib import Path
+                import yaml as _yaml
+                import json as _json
+                rf = Path(rules_file)
+                if not rf.is_absolute():
+                    rf = Path.cwd() / rf
+                if rf.suffix.lower() in ('.yaml', '.yml'):
+                    with open(rf, 'r', encoding='utf-8') as f:
+                        data = _yaml.safe_load(f) or {}
+                else:
+                    with open(rf, 'r', encoding='utf-8') as f:
+                        data = _json.load(f)
+                if isinstance(data, dict):
+                    self.review_config.update(data)
+            except Exception as e:
+                console.print(f"[yellow]⚠ 规则文件加载失败: {e}[/]")
+        
+        filters_conf = self.review_config.get('filters', {})
+        self.filters_ignore_quality = self.review_config.get('ignore_quality', filters_conf.get('ignore_quality', True))
+        self.filters_ignorable_keywords = filters_conf.get('ignorable_keywords', ["模糊", "糊", "blur", "低清晰度", "抖动", "画面质量"])
+        self.stop_on_first_issue = bool(self.review_config.get('stop_on_first_issue', True))
+        self.severity_weights = self.review_config.get('severity_weights', {'low': 5, 'medium': 10, 'high': 20, 'critical': 40})
+        _allow_src = self.review_config.get('allow_list') or self.review_config.get('allow_keywords') or ['mico', 'tiktok', 'instagram', 'whatsapp', 'paypal', 'app store']
+        self.allow_keywords = {str(k).lower() for k in _allow_src}
+        _comp_src = self.review_config.get('competitor_list') or self.review_config.get('competitor_keywords') or [
+            'iscreen', 'widgetsmith', 'color widgets', 'color widget',
+            'md clock', 'top widgets', 'topwidgets', '万能小组件',
+            'locket', 'widgetable', 'temas', 'screenkit', 'themify',
+            'photo widget', 'photowidget'
+        ]
+        self.competitor_keywords = {str(k).lower() for k in _comp_src}
+        _quality_src = self.review_config.get('quality_list') or self.review_config.get('non_premium_keywords') or ['roblox', 'hole.io']
+        self.non_premium_keywords = {str(k).lower() for k in _quality_src}
         
         # 初始化 AI 客户端
         self.client = None
@@ -84,15 +120,14 @@ class AIReviewer:
         self._init_client()
     
     def _filter_issues(self, issues: List[Dict]) -> List[Dict]:
-        ignorable_keywords = ["模糊", "糊", "blur", "低清晰度", "抖动", "画面质量"]
         filtered = []
         for i in issues:
             cat = (i.get('category') or '').lower()
             desc = (i.get('description') or '').lower()
             sev = (i.get('severity') or '').lower()
             is_quality = ("质量" in cat) or ("quality" in cat)
-            has_blur_kw = any(k in desc or k in cat for k in ignorable_keywords)
-            if is_quality or (sev == 'medium' and has_blur_kw):
+            has_blur_kw = any(k in desc or k in cat for k in self.filters_ignorable_keywords)
+            if self.filters_ignore_quality and (is_quality or (sev == 'medium' and has_blur_kw)):
                 continue
             filtered.append(i)
         return filtered
@@ -358,19 +393,22 @@ class AIReviewer:
                         else:
                             contents = frame_result.get('visible_content') or []
                             contents_norm = [str(c).lower() for c in contents]
-                            competitor_keywords = {
-                                'iscreen', 'widgetsmith', 'color widgets', 'color widget',
-                                'md clock', 'top widgets', 'topwidgets', '万能小组件',
-                                'locket', 'widgetable', 'temas', 'screenkit', 'themify',
-                                'photo widget', 'photowidget'
-                            }
                             hit = None
+                            hit_quality = None
                             for c in contents_norm:
-                                for kw in competitor_keywords:
+                                if any(ak in c for ak in self.allow_keywords):
+                                    continue
+                                for kw in self.competitor_keywords:
                                     if kw in c:
                                         hit = kw
                                         break
+                                for qk in self.non_premium_keywords:
+                                    if qk in c:
+                                        hit_quality = qk
+                                        break
                                 if hit:
+                                    break
+                                if hit_quality:
                                     break
                             if hit:
                                 all_issues.append({
@@ -381,8 +419,20 @@ class AIReviewer:
                                     'suggestion': ''
                                 })
                                 console.print(f"[yellow]‼ 通过关键词命中竞品: {hit}[/]")
-                                console.print(f"[yellow]停止进一步分析以节省资源[/]")
-                                break
+                                if self.stop_on_first_issue:
+                                    console.print(f"[yellow]停止进一步分析以节省资源[/]")
+                                    break
+                            elif hit_quality:
+                                all_issues.append({
+                                    'frame_index': idx,
+                                    'category': '画面质量问题',
+                                    'description': f'检测到低质内容关键词：{hit_quality}',
+                                    'severity': 'medium',
+                                    'suggestion': ''
+                                })
+                                if self.stop_on_first_issue:
+                                    console.print(f"[yellow]停止进一步分析以节省资源[/]")
+                                    break
                     except Exception as e:
                         api_error_count += 1
                         error_msg = str(e)
@@ -405,8 +455,7 @@ class AIReviewer:
             is_compliant = len(all_issues) == 0
             
             # 计算评分
-            severity_weights = {'low': 5, 'medium': 10, 'high': 20, 'critical': 40}
-            total_penalty = sum(severity_weights.get(i.get('severity', 'low'), 5) for i in all_issues)
+            total_penalty = sum(self.severity_weights.get(i.get('severity', 'low'), 5) for i in all_issues)
             overall_score = max(0, 100 - total_penalty)
             
             # 生成总结
@@ -563,19 +612,22 @@ class AIReviewer:
                         else:
                             apps = grid_result.get('all_visible_apps') or []
                             apps_norm = [str(a).lower() for a in apps]
-                            competitor_keywords = {
-                                'iscreen', 'widgetsmith', 'color widgets', 'color widget',
-                                'md clock', 'top widgets', 'topwidgets', '万能小组件',
-                                'locket', 'widgetable', 'temas', 'screenkit', 'themify',
-                                'photo widget', 'photowidget'
-                            }
                             hit = None
+                            hit_quality = None
                             for a in apps_norm:
-                                for kw in competitor_keywords:
+                                if any(ak in a for ak in self.allow_keywords):
+                                    continue
+                                for kw in self.competitor_keywords:
                                     if kw in a:
                                         hit = kw
                                         break
+                                for qk in self.non_premium_keywords:
+                                    if qk in a:
+                                        hit_quality = qk
+                                        break
                                 if hit:
+                                    break
+                                if hit_quality:
                                     break
                             if hit:
                                 ts_fallback = timestamps[0] if timestamps else 0
@@ -587,8 +639,21 @@ class AIReviewer:
                                     'suggestion': ''
                                 })
                                 console.print(f"[yellow]‼ 通过关键词命中竞品: {hit}[/]")
-                                console.print(f"[yellow]发现问题，停止进一步分析以节省资源[/]")
-                                break
+                                if self.stop_on_first_issue:
+                                    console.print(f"[yellow]发现问题，停止进一步分析以节省资源[/]")
+                                    break
+                            elif hit_quality:
+                                ts_fallback = timestamps[0] if timestamps else 0
+                                all_issues.append({
+                                    'timestamp': ts_fallback,
+                                    'category': '画面质量问题',
+                                    'description': f'检测到低质内容关键词：{hit_quality}',
+                                    'severity': 'medium',
+                                    'suggestion': ''
+                                })
+                                if self.stop_on_first_issue:
+                                    console.print(f"[yellow]发现问题，停止进一步分析以节省资源[/]")
+                                    break
                             
                     except Exception as e:
                         console.print(f"[yellow]⚠ 网格图 {grid_idx+1} 分析失败: {str(e)[:50]}[/]")
@@ -600,8 +665,7 @@ class AIReviewer:
             is_compliant = len(all_issues) == 0
             
             # 计算评分
-            severity_weights = {'low': 5, 'medium': 10, 'high': 20, 'critical': 40}
-            total_penalty = sum(severity_weights.get(i.get('severity', 'medium'), 10) for i in all_issues)
+            total_penalty = sum(self.severity_weights.get(i.get('severity', 'medium'), 10) for i in all_issues)
             overall_score = max(0, 100 - total_penalty)
             
             total_frames = sum(len(ts) for _, ts in grids)

@@ -51,6 +51,7 @@ def load_config() -> dict:
     
     return load_yaml_safe(CONFIG_PATH)
 
+
 def load_yaml_safe(path: Path) -> dict:
     """安全加载 YAML，处理各种编码"""
     encodings = ['utf-8', 'utf-8-sig', 'gb18030', 'gbk', 'cp936']
@@ -72,6 +73,22 @@ def ensure_directories(config: dict):
     for key in ['downloads', 'screenshots', 'reports']:
         dir_path = paths.get(key, f'./{key}')
         Path(dir_path).mkdir(parents=True, exist_ok=True)
+
+def resolve_path(base_dir: Path, path_str: str) -> Path:
+    ps = os.path.expanduser(os.path.expandvars(path_str or ''))
+    if os.path.isabs(ps):
+        return Path(os.path.normpath(ps))
+    return (base_dir / ps).resolve()
+
+
+@cli.command()
+def rules():
+    """显示 AI 审核规则（当前配置）"""
+    config = load_config()
+    review_conf = config.get('review', {})
+    import json as _json
+    console.print(Panel("AI 审核规则", style="blue"))
+    console.print(_json.dumps(review_conf, ensure_ascii=False, indent=2))
 
 
 @click.group()
