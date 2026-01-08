@@ -30,6 +30,7 @@ pyinstaller --name="MaterialReview" \
     --windowed \
     --onedir \
     --add-data="config.yaml:." \
+    --add-data="main.py:." \
     --add-data="src:src" \
     --hidden-import=PIL \
     --hidden-import=yaml \
@@ -38,6 +39,11 @@ pyinstaller --name="MaterialReview" \
     --hidden-import=jinja2 \
     --hidden-import=zhipuai \
     --hidden-import=openai \
+    --hidden-import=cv2 \
+    --hidden-import=numpy \
+    --hidden-import=imaplib \
+    --hidden-import=email \
+    --hidden-import=ssl \
     --runtime-hook=pyi_rth_cv2fix.py \
     --noconfirm \
     gui.py
@@ -51,8 +57,10 @@ echo ""
 echo "💡 测试命令:"
 echo "   open dist/MaterialReview.app"
 echo ""
-echo "📦 分发方法:"
-echo "   1. 压缩: cd dist && zip -r MaterialReview.zip MaterialReview.app"
-echo "   2. 发送 MaterialReview.zip 给同事"
-echo "   3. 同事解压后拖到应用程序文件夹即可使用"
+echo "🧩 创建 DMG 安装包..."
+DMG_PATH="dist/MaterialReview.dmg"
+VOL_NAME="MaterialReview"
+hdiutil create -volname "$VOL_NAME" -srcfolder "dist/MaterialReview.app" -ov -format UDZO "$DMG_PATH"
+echo "✅ DMG 完成: $DMG_PATH"
+echo "📏 DMG 大小: $(du -sh "$DMG_PATH" | cut -f1)"
 echo ""

@@ -81,16 +81,6 @@ def resolve_path(base_dir: Path, path_str: str) -> Path:
     return (base_dir / ps).resolve()
 
 
-@cli.command()
-def rules():
-    """显示 AI 审核规则（当前配置）"""
-    config = load_config()
-    review_conf = config.get('review', {})
-    import json as _json
-    console.print(Panel("AI 审核规则", style="blue"))
-    console.print(_json.dumps(review_conf, ensure_ascii=False, indent=2))
-
-
 @click.group()
 @click.version_option(version='1.0.0')
 def cli():
@@ -99,6 +89,16 @@ def cli():
     自动下载邮件中的视频附件，使用 AI 进行内容审核，生成审核报告。
     """
     pass
+
+
+@cli.command()
+def rules():
+    """显示 AI 审核规则（当前配置）"""
+    config = load_config()
+    review_conf = config.get('review', {})
+    import json as _json
+    console.print(Panel("AI 审核规则", style="blue"))
+    console.print(_json.dumps(review_conf, ensure_ascii=False, indent=2))
 
 
 @cli.command()

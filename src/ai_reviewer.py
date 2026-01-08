@@ -104,7 +104,7 @@ class AIReviewer:
         _allow_src = self.review_config.get('allow_list') or self.review_config.get('allow_keywords') or ['mico', 'tiktok', 'instagram', 'whatsapp', 'paypal', 'app store']
         self.allow_keywords = {str(k).lower() for k in _allow_src}
         _comp_src = self.review_config.get('competitor_list') or self.review_config.get('competitor_keywords') or [
-            'iscreen', 'widgetsmith', 'color widgets', 'color widget',
+            'iscreen', 'i screen', 'widgetsmith', 'color widgets', 'color widget',
             'md clock', 'top widgets', 'topwidgets', '万能小组件',
             'locket', 'widgetable', 'temas', 'screenkit', 'themify',
             'photo widget', 'photowidget'
@@ -393,13 +393,15 @@ class AIReviewer:
                         else:
                             contents = frame_result.get('visible_content') or []
                             contents_norm = [str(c).lower() for c in contents]
+                            def _norm(s: str) -> str:
+                                return ''.join(str(s).lower().split())
                             hit = None
                             hit_quality = None
                             for c in contents_norm:
                                 if any(ak in c for ak in self.allow_keywords):
                                     continue
                                 for kw in self.competitor_keywords:
-                                    if kw in c:
+                                    if _norm(kw) in _norm(c):
                                         hit = kw
                                         break
                                 for qk in self.non_premium_keywords:
@@ -612,13 +614,15 @@ class AIReviewer:
                         else:
                             apps = grid_result.get('all_visible_apps') or []
                             apps_norm = [str(a).lower() for a in apps]
+                            def _norm(s: str) -> str:
+                                return ''.join(str(s).lower().split())
                             hit = None
                             hit_quality = None
                             for a in apps_norm:
                                 if any(ak in a for ak in self.allow_keywords):
                                     continue
                                 for kw in self.competitor_keywords:
-                                    if kw in a:
+                                    if _norm(kw) in _norm(a):
                                         hit = kw
                                         break
                                 for qk in self.non_premium_keywords:

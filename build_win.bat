@@ -37,6 +37,11 @@ pyinstaller --noconfirm --onedir --windowed --name "MaterialReview" ^
     --hidden-import "jinja2" ^
     --hidden-import "zhipuai" ^
     --hidden-import "openai" ^
+    --hidden-import "cv2" ^
+    --hidden-import "numpy" ^
+    --hidden-import "imaplib" ^
+    --hidden-import "email" ^
+    --hidden-import "ssl" ^
     --runtime-hook "pyi_rth_cv2fix.py" ^
     gui.py
 
