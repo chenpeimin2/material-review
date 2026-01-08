@@ -341,12 +341,18 @@ class MaterialReviewGUI:
             self.notebook.select(0) # 自动切换到运行页
             
             try:
+                # 强制使用 UTF-8 环境，解决 Windows 下 GBK 编码问题
+                env = os.environ.copy()
+                env["PYTHONIOENCODING"] = "utf-8"
+                
                 process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
-                    bufsize=1
+                    encoding='utf-8',
+                    bufsize=1,
+                    env=env
                 )
                 
                 for line in process.stdout:
