@@ -1,22 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
-
-datas = [('config.yaml', '.'), ('src', 'src')]
-binaries = []
-hiddenimports = ['PIL', 'yaml', 'click', 'rich', 'jinja2', 'zhipuai', 'openai']
-tmp_ret = collect_all('cv2')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
     ['gui.py'],
     pathex=[],
-    binaries=binaries,
-    datas=datas,
-    hiddenimports=hiddenimports,
+    binaries=[],
+    datas=[('config.yaml', '.'), ('src', 'src')],
+    hiddenimports=['PIL', 'yaml', 'click', 'rich', 'jinja2', 'zhipuai', 'openai'],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['pyi_rth_cv2fix.py'],
     excludes=[],
     noarchive=False,
     optimize=0,

@@ -31,6 +31,13 @@ pyinstaller --noconfirm --onedir --windowed --name "MaterialReview" ^
     --add-data "src;src" ^
     --hidden-import "PIL" ^
     --hidden-import "PIL._tkinter_finder" ^
+    --hidden-import "yaml" ^
+    --hidden-import "click" ^
+    --hidden-import "rich" ^
+    --hidden-import "jinja2" ^
+    --hidden-import "zhipuai" ^
+    --hidden-import "openai" ^
+    --runtime-hook "pyi_rth_cv2fix.py" ^
     gui.py
 
 if %errorlevel% neq 0 (

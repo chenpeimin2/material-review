@@ -13,21 +13,48 @@ import os
 from pathlib import Path
 import yaml
 
+import shutil
+
 class MaterialReviewGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Material Review - 素材视频审核工具")
         self.root.geometry("900x750")
         
-        # 获取可执行文件路径
+        # 1. 确定运行模式和资源路径
         if getattr(sys, 'frozen', False):
+            # 打包环境
             self.base_path = sys._MEIPASS
             self.main_script = os.path.join(self.base_path, 'main.py')
-            self.config_path = os.path.join(self.base_path, 'config.yaml')
+            self.resource_config_path = os.path.join(self.base_path, 'config.yaml')
         else:
+            # 开发环境
             self.base_path = os.path.dirname(os.path.abspath(__file__))
             self.main_script = os.path.join(self.base_path, 'main.py')
-            self.config_path = os.path.join(self.base_path, 'config.yaml')
+            self.resource_config_path = os.path.join(self.base_path, 'config.yaml')
+            
+        # 2. 确定数据存储目录（解决沙盒只读问题）
+        # 将数据和配置放在用户的文档目录下
+        self.work_dir = os.path.join(os.path.expanduser("~"), "Documents", "MaterialReview")
+        if not os.path.exists(self.work_dir):
+            try:
+                os.makedirs(self.work_dir)
+            except Exception as e:
+                messagebox.showerror("错误", f"无法创建数据目录: {self.work_dir}\n{e}")
+        
+        # 3. 确定最终使用的 config.yaml 路径
+        self.config_path = os.path.join(self.work_dir, 'config.yaml')
+        
+        # 4. 如果配置不存在，从资源目录复制一份
+        if not os.path.exists(self.config_path):
+            if os.path.exists(self.resource_config_path):
+                try:
+                    shutil.copy2(self.resource_config_path, self.config_path)
+                except Exception as e:
+                    messagebox.showerror("错误", f"无法初始化配置文件: {e}")
+            else:
+                # 连默认配置都没有，创建一个空的或者提示
+                pass
         
         self.create_widgets()
         self.load_config_to_gui()
@@ -111,7 +138,8 @@ class MaterialReviewGUI:
         
         ttk.Button(group_tools, text="测试邮箱连接", command=lambda: self.run_command([sys.executable, self.main_script, 'test-email'])).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="测试 AI 连接", command=lambda: self.run_command([sys.executable, self.main_script, 'test-ai'])).pack(pady=2, fill=tk.X)
-        ttk.Button(group_tools, text="打开报告目录", command=lambda: self.run_command(['open', os.path.join(self.base_path, 'reports')])).pack(pady=2, fill=tk.X)
+        # 打开位于 work_dir 下的 reports 目录
+        ttk.Button(group_tools, text="打开报告目录", command=lambda: self.run_command(['open', os.path.join(self.work_dir, 'reports')])).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="清除所有缓存", command=self.clear_cache).pack(pady=2, fill=tk.X)
 
         # === 右侧的日志面板 ===
@@ -363,7 +391,8 @@ class MaterialReviewGUI:
                     encoding='utf-8',
                     errors='replace',
                     bufsize=1,
-                    env=env
+                    env=env,
+                    cwd=self.work_dir  # 关键：设置工作目录为文档目录，这样 main.py 就会在这里查找 config 和创建数据目录
                 )
                 
                 for line in process.stdout:

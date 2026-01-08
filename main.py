@@ -8,6 +8,8 @@ import os
 import sys
 import io
 import time
+sys.path = [p for p in sys.path if 'cv2' not in os.path.basename(p)]
+
 from pathlib import Path
 from datetime import datetime
 
@@ -30,27 +32,38 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 console = Console()
 
-# 配置文件路径
-CONFIG_PATH = Path(__file__).parent / "config.yaml"
+# 配置文件路径：优先使用当前工作目录下的 config.yaml
+# 这样可以通过改变工作目录来切换配置和数据存储位置（解决 App 沙盒只读问题）
+CONFIG_PATH = Path.cwd() / "config.yaml"
 
 
 def load_config() -> dict:
     """加载配置文件"""
+    # 如果当前目录下没有 config.yaml，尝试回退到脚本所在目录查找（兼容旧模式/开发模式）
     if not CONFIG_PATH.exists():
+        script_dir_config = Path(__file__).parent / "config.yaml"
+        if script_dir_config.exists():
+             return load_yaml_safe(script_dir_config)
+             
         console.print(f"[red]✗ 配置文件不存在：{CONFIG_PATH}[/]")
         console.print("[yellow]请先复制 config.yaml.example 并填写配置[/]")
         sys.exit(1)
     
+    return load_yaml_safe(CONFIG_PATH)
+
+def load_yaml_safe(path: Path) -> dict:
+    """安全加载 YAML，处理各种编码"""
     encodings = ['utf-8', 'utf-8-sig', 'gb18030', 'gbk', 'cp936']
     for enc in encodings:
         try:
-            with open(CONFIG_PATH, 'r', encoding=enc) as f:
+            with open(path, 'r', encoding=enc) as f:
                 return yaml.safe_load(f) or {}
         except UnicodeDecodeError:
             continue
-    with open(CONFIG_PATH, 'rb') as f:
+    with open(path, 'rb') as f:
         text = f.read().decode('utf-8', errors='replace')
     return yaml.safe_load(text) or {}
+
 
 
 def ensure_directories(config: dict):
@@ -710,6 +723,7 @@ def review(video_file, download_first, sender, since):
     # 如果需要先下载
     elif download_first:
         email_config = config.get('email', {})
+        from src.email_handler import EmailHandler
         handler = EmailHandler(email_config)
         
         if not handler.connect():

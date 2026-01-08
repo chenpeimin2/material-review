@@ -38,7 +38,7 @@ pyinstaller --name="MaterialReview" \
     --hidden-import=jinja2 \
     --hidden-import=zhipuai \
     --hidden-import=openai \
-    --collect-all cv2 \
+    --runtime-hook=pyi_rth_cv2fix.py \
     --noconfirm \
     gui.py
 
