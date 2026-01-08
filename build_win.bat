@@ -28,7 +28,10 @@ echo [INFO] 正在打包 (PyInstaller)...
 :: 注意：Windows 下 --add-data 使用分号 ; 分隔
 pyinstaller --noconfirm --onedir --windowed --name "MaterialReview" ^
     --add-data "config.yaml;." ^
+    --add-data "main.py;." ^
     --add-data "src;src" ^
+    --collect-all "cv2" ^
+    --collect-all "numpy" ^
     --hidden-import "PIL" ^
     --hidden-import "PIL._tkinter_finder" ^
     --hidden-import "yaml" ^

@@ -30,6 +30,8 @@ jobs:
         --add-data "config.yaml;." ^
         --add-data "main.py;." ^
         --add-data "src;src" ^
+        --collect-all "cv2" ^
+        --collect-all "numpy" ^
         --hidden-import "PIL" ^
         --hidden-import "PIL._tkinter_finder" ^
         --hidden-import "yaml" ^
@@ -46,8 +48,13 @@ jobs:
         --runtime-hook "pyi_rth_cv2fix.py" ^
         gui.py
         
+    - name: Compress Artifact
+      shell: pwsh
+      run: |
+        Compress-Archive -Path "dist\MaterialReview" -DestinationPath "dist\MaterialReview_Windows.zip" -Force
+        
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v4
       with:
         name: MaterialReview_Windows
-        path: dist/MaterialReview
+        path: dist/MaterialReview_Windows.zip
