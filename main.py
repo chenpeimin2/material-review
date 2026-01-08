@@ -6,6 +6,7 @@
 
 import os
 import sys
+import io
 import time
 from pathlib import Path
 from datetime import datetime
@@ -15,6 +16,14 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+
+# 强制 stdout/stderr 使用 UTF-8 编码，解决 Windows 下 GBK 无法输出特殊字符的问题
+if sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))
