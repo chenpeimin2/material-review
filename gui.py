@@ -151,27 +151,21 @@ class MaterialReviewGUI:
         # 保存按钮
         ttk.Button(group_email, text="保存配置", command=self.save_config).grid(row=4, column=1, sticky="e", pady=20)
 
-        # AI 设置
-        group_ai = ttk.LabelFrame(parent, text="AI 设置", padding="15")
-        group_ai.pack(fill=tk.X, pady=10)
+        # AI 设置 - 已隐藏
+        # group_ai = ttk.LabelFrame(parent, text="AI 设置", padding="15")
+        # group_ai.pack(fill=tk.X, pady=10)
         
         # 1. AI 提供商
-        ttk.Label(group_ai, text="AI 服务商:").grid(row=0, column=0, sticky="w", pady=5)
-        self.ai_provider_var = tk.StringVar()
-        ai_provider_cb = ttk.Combobox(group_ai, textvariable=self.ai_provider_var, state="readonly", width=15)
-        ai_provider_cb['values'] = ('智谱 AI (Zhipu)', '通义千问 (Qwen)')
-        ai_provider_cb.grid(row=0, column=1, sticky="w", pady=5)
+        # ttk.Label(group_ai, text="AI 服务商:").grid(row=0, column=0, sticky="w", pady=5)
+        # self.ai_provider_var = tk.StringVar()
+        # ai_provider_cb = ttk.Combobox(group_ai, textvariable=self.ai_provider_var, state="readonly", width=15)
+        # ai_provider_cb['values'] = ('智谱 AI (Zhipu)', '通义千问 (Qwen)')
+        # ai_provider_cb.grid(row=0, column=1, sticky="w", pady=5)
         
         # 2. API Key
-        ttk.Label(group_ai, text="API Key:").grid(row=1, column=0, sticky="w", pady=5)
-        self.ai_apikey_var = tk.StringVar()
-        ttk.Entry(group_ai, textvariable=self.ai_apikey_var, show="*", width=30).grid(row=1, column=1, sticky="w", pady=5)
-        
-        # 3.通过 Provider 选择自动更新默认模型 (简单处理，不做联动)
-        ttk.Label(group_ai, text="模型名称:").grid(row=2, column=0, sticky="w", pady=5)
-        self.ai_model_var = tk.StringVar()
-        ttk.Entry(group_ai, textvariable=self.ai_model_var, width=30).grid(row=2, column=1, sticky="w", pady=5)
-        ttk.Label(group_ai, text="(如 glm-4v-flash 或 qwen-vl-max)", font=("Arial", 9, "italic"), foreground="gray").grid(row=2, column=2, sticky="w", padx=10)
+        # ttk.Label(group_ai, text="API Key:").grid(row=1, column=0, sticky="w", pady=5)
+        # self.ai_apikey_var = tk.StringVar()
+        # ttk.Entry(group_ai, textvariable=self.ai_apikey_var, show="*", width=30).grid(row=1, column=1, sticky="w", pady=5)
 
         # 保存按钮 (复用上面的保存逻辑，或者给 AI 单独一个保存按钮，这里统一下面给一个总的保存看起来更整洁，但为了方便，在每个group加一个也行，或者在最下面加一个总的)
         # 这里选择在最底部加一个总保存按钮
@@ -223,16 +217,14 @@ class MaterialReviewGUI:
                 self.email_provider_var.set('自定义')
             
             # 加载 AI 配置
-            ai_conf = config.get('ai', {})
-            provider = ai_conf.get('provider', 'zhipu')
-            if provider == 'zhipu':
-                self.ai_provider_var.set('智谱 AI (Zhipu)')
-                self.ai_apikey_var.set(ai_conf.get('zhipu', {}).get('api_key', ''))
-                self.ai_model_var.set(ai_conf.get('zhipu', {}).get('model', 'glm-4v-flash'))
-            elif provider == 'qwen':
-                self.ai_provider_var.set('通义千问 (Qwen)')
-                self.ai_apikey_var.set(ai_conf.get('qwen', {}).get('api_key', ''))
-                self.ai_model_var.set(ai_conf.get('qwen', {}).get('model', 'qwen-vl-max'))
+            # ai_conf = config.get('ai', {})
+            # provider = ai_conf.get('provider', 'zhipu')
+            # if provider == 'zhipu':
+            #     self.ai_provider_var.set('智谱 AI (Zhipu)')
+            #     self.ai_apikey_var.set(ai_conf.get('zhipu', {}).get('api_key', ''))
+            # elif provider == 'qwen':
+            #     self.ai_provider_var.set('通义千问 (Qwen)')
+            #     self.ai_apikey_var.set(ai_conf.get('qwen', {}).get('api_key', ''))
                 
         except Exception as e:
             messagebox.showerror("错误", f"读取配置文件失败: {e}")
@@ -270,23 +262,21 @@ class MaterialReviewGUI:
             config['email']['imap_port'] = 993
             
             # 更新 AI 配置
-            if 'ai' not in config:
-                config['ai'] = {}
+            # if 'ai' not in config:
+            #     config['ai'] = {}
                 
-            provider_str = self.ai_provider_var.get()
-            if '智谱' in provider_str:
-                config['ai']['provider'] = 'zhipu'
-                if 'zhipu' not in config['ai']: config['ai']['zhipu'] = {}
-                config['ai']['zhipu']['api_key'] = self.ai_apikey_var.get().strip()
-                config['ai']['zhipu']['model'] = self.ai_model_var.get().strip()
-            elif '千问' in provider_str:
-                config['ai']['provider'] = 'qwen'
-                if 'qwen' not in config['ai']: config['ai']['qwen'] = {}
-                config['ai']['qwen']['api_key'] = self.ai_apikey_var.get().strip()
-                config['ai']['qwen']['model'] = self.ai_model_var.get().strip()
-                # 确保 base_url 存在
-                if 'base_url' not in config['ai']['qwen']:
-                    config['ai']['qwen']['base_url'] = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+            # provider_str = self.ai_provider_var.get()
+            # if '智谱' in provider_str:
+            #     config['ai']['provider'] = 'zhipu'
+            #     if 'zhipu' not in config['ai']: config['ai']['zhipu'] = {}
+            #     config['ai']['zhipu']['api_key'] = self.ai_apikey_var.get().strip()
+            # elif '千问' in provider_str:
+            #     config['ai']['provider'] = 'qwen'
+            #     if 'qwen' not in config['ai']: config['ai']['qwen'] = {}
+            #     config['ai']['qwen']['api_key'] = self.ai_apikey_var.get().strip()
+            #     # 确保 base_url 存在
+            #     if 'base_url' not in config['ai']['qwen']:
+            #         config['ai']['qwen']['base_url'] = "https://dashscope.aliyuncs.com/compatible-mode/v1"
             
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, allow_unicode=True, default_flow_style=False)

@@ -41,7 +41,7 @@ ai:
   # 申请地址：https://open.bigmodel.cn/
   zhipu:
     api_key: "701f8ed339574404978506575ef71737.6kjtwTaBY2PBTAbr"
-    model: "glm-4.6v-flash"
+    model: "glm-4v-flash"
 
 
 

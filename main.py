@@ -101,7 +101,12 @@ def test_ai():
         console.print("\n[green]✓ AI 连接测试成功！[/]")
     else:
         console.print("\n[red]✗ AI 连接测试失败[/]")
-        console.print("[yellow]请检查 API Key 是否正确[/]")
+        if getattr(reviewer, 'last_error', None):
+            console.print(f"[yellow]错误详情：{str(reviewer.last_error)[:200]}[/]")
+        console.print("[yellow]常见原因：[/]")
+        console.print("  1) API Key 无效或未配置")
+        console.print("  2) 模型名不正确（建议使用: glm-4v-flash）")
+        console.print("  3) 网络或地区访问受限")
         sys.exit(1)
 
 

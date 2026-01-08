@@ -79,6 +79,8 @@ class AIReviewer:
         
         # 初始化 AI 客户端
         self.client = None
+        self.model = None
+        self.last_error = None
         self._init_client()
     
     def _filter_issues(self, issues: List[Dict]) -> List[Dict]:
@@ -140,7 +142,10 @@ class AIReviewer:
                 return
             
             self.client = ZhipuAI(api_key=api_key)
-            self.model = zhipu_config.get('model', 'glm-4v-flash')
+            raw_model = (zhipu_config.get('model') or '').strip() or 'glm-4v-flash'
+            model_norm = raw_model.lower().strip()
+            aliases = {'glm-4.6v-flash': 'glm-4v-flash', 'glm-4.6vplus': 'glm-4v-plus', 'glm-4.6v': 'glm-4v'}
+            self.model = aliases.get(model_norm, model_norm)
             self.provider_type = 'zhipu'
             
             console.print(f"[green]✓ 智谱 AI 初始化成功 (模型: {self.model})[/]")
@@ -148,6 +153,7 @@ class AIReviewer:
         except ImportError:
             console.print("[red]✗ 请安装 zhipuai: pip install zhipuai[/]")
         except Exception as e:
+            self.last_error = str(e)
             console.print(f"[red]✗ 智谱 AI 初始化失败：{e}[/]")
     
     def _build_review_prompt(self) -> str:
@@ -757,12 +763,34 @@ class AIReviewer:
         
         try:
             # 智谱也支持类似的 chat.completions 接口
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": "回复 'OK' 则表示连接成功"}],
-                max_tokens=10
-            )
-            return 'OK' in response.choices[0].message.content.upper()
+            def try_once(model_name: str) -> Optional[bool]:
+                resp = self.client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": "回复 'OK' 则表示连接成功"}],
+                    max_tokens=10
+                )
+                return 'OK' in resp.choices[0].message.content.upper()
+            
+            ok = try_once(self.model or 'glm-4v-flash')
+            if ok is not None:
+                return ok
+            return False
         except Exception as e:
+            self.last_error = str(e)
             console.print(f"[red]✗ {self.provider} API 连接测试失败：{e}[/]")
+            # 如果可能是模型名问题，自动回退一次
+            err = str(e).lower()
+            model_issue = any(k in err for k in ['model', 'not found', '不存在', 'unknown', 'unsupported'])
+            if model_issue:
+                fallback = 'glm-4v-flash'
+                try:
+                    console.print(f"[yellow]⚠ 尝试使用回退模型 {fallback} 重新连接[/]")
+                    resp = self.client.chat.completions.create(
+                        model=fallback,
+                        messages=[{"role": "user", "content": "回复 'OK' 则表示连接成功"}],
+                        max_tokens=10
+                    )
+                    return 'OK' in resp.choices[0].message.content.upper()
+                except Exception as e2:
+                    self.last_error = f"{self.last_error}; fallback_error={e2}"
             return False
