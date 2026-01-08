@@ -139,7 +139,7 @@ class MaterialReviewGUI:
         ttk.Button(group_tools, text="测试邮箱连接", command=lambda: self.run_command([sys.executable, self.main_script, 'test-email'])).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="测试 AI 连接", command=lambda: self.run_command([sys.executable, self.main_script, 'test-ai'])).pack(pady=2, fill=tk.X)
         # 打开位于 work_dir 下的 reports 目录
-        ttk.Button(group_tools, text="打开报告目录", command=lambda: self.run_command(['open', os.path.join(self.work_dir, 'reports')])).pack(pady=2, fill=tk.X)
+        ttk.Button(group_tools, text="打开报告目录", command=self.open_reports_dir).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="清除所有缓存", command=self.clear_cache).pack(pady=2, fill=tk.X)
 
         # === 右侧的日志面板 ===
@@ -366,6 +366,36 @@ class MaterialReviewGUI:
         if messagebox.askyesno("确认清理", "确定要清空所有报告、截图和下载的视频吗？\n\n这将删除 'reports', 'screenshots' 和 'downloads' 目录下的所有文件。"):
             # 添加 --include-downloads 标志以清理所有内容
             self.run_command([sys.executable, self.main_script, 'clean', '--include-downloads'])
+    
+    def open_reports_dir(self):
+        try:
+            config = None
+            for enc in ['utf-8', 'utf-8-sig', 'gb18030', 'gbk', 'cp936']:
+                try:
+                    with open(self.config_path, 'r', encoding=enc) as f:
+                        config = yaml.safe_load(f) or {}
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if config is None:
+                with open(self.config_path, 'rb') as f:
+                    text = f.read().decode('utf-8', errors='replace')
+                config = yaml.safe_load(text) or {}
+            paths = config.get('paths', {})
+            reports_conf = paths.get('reports', './reports')
+            if os.path.isabs(reports_conf):
+                reports_dir = reports_conf
+            else:
+                reports_dir = os.path.normpath(os.path.join(self.work_dir, reports_conf))
+            os.makedirs(reports_dir, exist_ok=True)
+            if sys.platform == 'darwin':
+                self.run_command(['open', reports_dir])
+            elif sys.platform.startswith('win'):
+                self.run_command(['explorer', reports_dir])
+            else:
+                self.run_command(['xdg-open', reports_dir])
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开报告目录: {e}")
 
     def run_command(self, cmd):
         """运行命令并更新UI"""
