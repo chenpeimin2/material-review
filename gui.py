@@ -138,7 +138,8 @@ class MaterialReviewGUI:
         
         ttk.Button(group_tools, text="测试邮箱连接", command=lambda: self.run_command([sys.executable, self.main_script, 'test-email'])).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="测试 AI 连接", command=lambda: self.run_command([sys.executable, self.main_script, 'test-ai'])).pack(pady=2, fill=tk.X)
-        # 打开位于 work_dir 下的 reports 目录
+        ttk.Button(group_tools, text="打开下载目录", command=self.open_downloads_dir).pack(pady=2, fill=tk.X)
+        ttk.Button(group_tools, text="打开截图目录", command=self.open_screenshots_dir).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="打开报告目录", command=self.open_reports_dir).pack(pady=2, fill=tk.X)
         ttk.Button(group_tools, text="清除所有缓存", command=self.clear_cache).pack(pady=2, fill=tk.X)
 
@@ -367,6 +368,24 @@ class MaterialReviewGUI:
             # 添加 --include-downloads 标志以清理所有内容
             self.run_command([sys.executable, self.main_script, 'clean', '--include-downloads'])
     
+    def _resolve_path(self, base_dir: str, path_str: str) -> str:
+        ps = os.path.expanduser(os.path.expandvars(path_str or ''))
+        if os.path.isabs(ps):
+            return os.path.normpath(ps)
+        return os.path.normpath(os.path.join(base_dir, ps if ps else '.'))
+    
+    def _open_dir(self, path_str: str):
+        try:
+            os.makedirs(path_str, exist_ok=True)
+            if sys.platform == 'darwin':
+                self.run_command(['open', path_str])
+            elif sys.platform.startswith('win'):
+                self.run_command(['explorer', path_str])
+            else:
+                self.run_command(['xdg-open', path_str])
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开目录: {e}")
+    
     def open_reports_dir(self):
         try:
             config = None
@@ -382,20 +401,50 @@ class MaterialReviewGUI:
                     text = f.read().decode('utf-8', errors='replace')
                 config = yaml.safe_load(text) or {}
             paths = config.get('paths', {})
-            reports_conf = paths.get('reports', './reports')
-            if os.path.isabs(reports_conf):
-                reports_dir = reports_conf
-            else:
-                reports_dir = os.path.normpath(os.path.join(self.work_dir, reports_conf))
-            os.makedirs(reports_dir, exist_ok=True)
-            if sys.platform == 'darwin':
-                self.run_command(['open', reports_dir])
-            elif sys.platform.startswith('win'):
-                self.run_command(['explorer', reports_dir])
-            else:
-                self.run_command(['xdg-open', reports_dir])
+            reports_dir = self._resolve_path(self.work_dir, paths.get('reports', './reports'))
+            self._open_dir(reports_dir)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开报告目录: {e}")
+    
+    def open_downloads_dir(self):
+        try:
+            config = None
+            for enc in ['utf-8', 'utf-8-sig', 'gb18030', 'gbk', 'cp936']:
+                try:
+                    with open(self.config_path, 'r', encoding=enc) as f:
+                        config = yaml.safe_load(f) or {}
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if config is None:
+                with open(self.config_path, 'rb') as f:
+                    text = f.read().decode('utf-8', errors='replace')
+                config = yaml.safe_load(text) or {}
+            paths = config.get('paths', {})
+            downloads_dir = self._resolve_path(self.work_dir, paths.get('downloads', './downloads'))
+            self._open_dir(downloads_dir)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开下载目录: {e}")
+    
+    def open_screenshots_dir(self):
+        try:
+            config = None
+            for enc in ['utf-8', 'utf-8-sig', 'gb18030', 'gbk', 'cp936']:
+                try:
+                    with open(self.config_path, 'r', encoding=enc) as f:
+                        config = yaml.safe_load(f) or {}
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if config is None:
+                with open(self.config_path, 'rb') as f:
+                    text = f.read().decode('utf-8', errors='replace')
+                config = yaml.safe_load(text) or {}
+            paths = config.get('paths', {})
+            screenshots_dir = self._resolve_path(self.work_dir, paths.get('screenshots', './screenshots'))
+            self._open_dir(screenshots_dir)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开截图目录: {e}")
 
     def run_command(self, cmd):
         """运行命令并更新UI"""
