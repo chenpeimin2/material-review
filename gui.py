@@ -369,6 +369,24 @@ class MaterialReviewGUI:
         thread.start()
 
 def main():
+    # 检查是否为冻结环境且作为子进程调用
+    if getattr(sys, 'frozen', False):
+        # 典型的 subprocess 调用会是: [MaterialReview.exe, main.py, review, ...]
+        if len(sys.argv) > 1 and sys.argv[1].endswith('main.py'):
+            # 移除 args[0] (exe) 和 args[1] (main.py)
+            # 重构 sys.argv 使其看起来像: [main.py, review, ...]
+            # 这样 click 就能正确解析
+            sys.argv = sys.argv[1:]
+            
+            # 导入 main 模块并执行 CLI
+            try:
+                import main as cli_main
+                cli_main.cli()
+            except Exception as e:
+                print(f"Error executing CLI: {e}")
+                sys.exit(1)
+            sys.exit(0)
+
     root = tk.Tk()
     # 尝试设置图标（如果有的话）
     # root.iconbitmap('icon.ico') 
