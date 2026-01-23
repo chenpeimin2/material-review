@@ -1,0 +1,22 @@
+# Environments
+venv/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Distribution / Packaging
+dist/
+build/
+*.spec
+
+# Application Data
+downloads/
+reports/
+screenshots/
+secrets.yaml
+
+# System
+.DS_Store
